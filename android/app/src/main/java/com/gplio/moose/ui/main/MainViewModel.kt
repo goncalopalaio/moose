@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import com.gplio.cask.Cask
 import com.gplio.moose.storage.room.database.EntryDatabase
 import kotlin.system.measureTimeMillis
 
@@ -12,6 +13,10 @@ private const val TAG = "MainViewModel"
 class MainViewModel : ViewModel() {
     private val _report = MutableLiveData<String>()
     val report: LiveData<String> = _report
+
+    fun runCask() {
+        Cask()
+    }
 
     fun runRoom() {
         // TODO (Gonçalo): Inject database objects through view model.

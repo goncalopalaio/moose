@@ -39,6 +39,9 @@ class MainFragment : Fragment() {
         thread {
             viewModel.runRoom()
         }
+        thread {
+            viewModel.runCask()
+        }
     }
 
     private fun log(message: String) = Log.d(TAG, message)
