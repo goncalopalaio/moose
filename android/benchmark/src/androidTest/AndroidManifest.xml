@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.gplio.benchmark">
 
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+
     <!--
       Important: disable debugging for accurate performance results
 
@@ -11,6 +14,12 @@
     -->
     <application
         android:debuggable="false"
+        android:requestLegacyExternalStorage="true"
         tools:ignore="HardcodedDebugMode"
         tools:replace="android:debuggable" />
+
+    <!--
+        android:requestLegacyExternalStorage="true"
+        java.io.FileNotFoundException: /storage/emulated/0/Android/data/com.gplio.benchmark.test/cache/CaskBenchmark_log_2023-04-29-15-16-48.perfetto-trace: open failed: EACCES (Permission denied)
+    -->
 </manifest>

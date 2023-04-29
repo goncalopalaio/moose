@@ -15,6 +15,9 @@ private const val HEADER_SIZE = 3 * Int.SIZE_BYTES + 2 * Short.SIZE_BYTES
  * https://riak.com/assets/bitcask-intro.pdf
  */
 class Cask(private val caskPath: String) {
+
+    constructor(file: File) : this(file.path)
+
     // TODO (Gonçalo): Handle concurrent updates
     // TODO (Gonçalo): Is it worth to use FileChannel.map to map the file to memory completely? for small files it shouldn't
     // TODO (Gonçalo): Check FileChannel.lock
