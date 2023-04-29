@@ -15,7 +15,7 @@ class MainViewModel : ViewModel() {
     val report: LiveData<String> = _report
 
     fun runCask() {
-        Cask()
+        Cask("cask").apply { init() }
     }
 
     fun runRoom() {
