@@ -54,7 +54,7 @@ class Cask(private val caskPath: String) {
 
     fun read(key: String): String? {
         val offsetOfEntry = keyDirectory[key]
-        log("read - key=$key, offsetOfEntry=$offsetOfEntry")
+        if (VERBOSE) log("read - key=$key, offsetOfEntry=$offsetOfEntry")
         if (offsetOfEntry == null) return null
 
         val file = File(caskPath)
@@ -64,7 +64,7 @@ class Cask(private val caskPath: String) {
             channel.position(offsetOfEntry)
 
             val size = channel.size()
-            log("read - offsetOfEntry=${offsetOfEntry.toInt()}, size=$size")
+            if (VERBOSE) log("read - offsetOfEntry=${offsetOfEntry.toInt()}, size=$size")
 
             val entry = readEntry(channel)
 
@@ -77,7 +77,7 @@ class Cask(private val caskPath: String) {
         val entry = createEntry(key.toByteArray(), value.toByteArray())
 
         if (entry == null) {
-            log("add - entry is null | key=$key, value=$value")
+            if (VERBOSE) log("add - entry is null | key=$key, value=$value")
             return
         }
 
@@ -87,14 +87,14 @@ class Cask(private val caskPath: String) {
             val initialPosition =
                 channel.position() // TODO (Gonçalo): Catch IOException; atomic updates of endOfFile
             val bytesWritten = channel.write(entry)
-            log("add - key=$key, value=$value, initialPosition=$initialPosition, bytesWritten=$bytesWritten")
+            if (VERBOSE) log("add - key=$key, value=$value, initialPosition=$initialPosition, bytesWritten=$bytesWritten")
 
             if (bytesWritten == 0) return@appendToFile
-            channel.force(false)
+            // channel.force(false)
 
             endOfFile = initialPosition + bytesWritten
             keyDirectory[key] = initialPosition
-            log("add - key=$key, initialPosition=$initialPosition, endOfFile=$endOfFile")
+            if (VERBOSE) log("add - key=$key, initialPosition=$initialPosition, endOfFile=$endOfFile")
         }
     }
 
@@ -136,7 +136,7 @@ class Cask(private val caskPath: String) {
         val headerBuffer = ByteBuffer.allocate(HEADER_SIZE)
         val header = arrayOf(headerBuffer)
         val readHeaderBytes = channel.read(header, 0, 1)
-        log("read - readHeaderBytes=$readHeaderBytes, headerBuffer=$headerBuffer")
+        if (VERBOSE) log("read - readHeaderBytes=$readHeaderBytes, headerBuffer=$headerBuffer")
 
         // TODO (Gonçalo): Check if header was completely read
 
@@ -147,12 +147,12 @@ class Cask(private val caskPath: String) {
         val keyType = headerBuffer.short
         val valueType = headerBuffer.short
 
-        log("read - epoch=$epoch, keySize=$keySize, valueSize=$valueSize, keyType=$keyType, valueType=$valueType")
+        if (VERBOSE) log("read - epoch=$epoch, keySize=$keySize, valueSize=$valueSize, keyType=$keyType, valueType=$valueType")
 
         val bodyBuffer = ByteBuffer.allocate(keySize + valueSize)
         val body = arrayOf(bodyBuffer)
         val readBodyBytes = channel.read(body, 0, 1)
-        log("read - readBodyBytes=$readBodyBytes, bodyBuffer=$bodyBuffer")
+        if (VERBOSE) log("read - readBodyBytes=$readBodyBytes, bodyBuffer=$bodyBuffer")
 
         // TODO (Gonçalo): Check if body was completely read
 
@@ -160,7 +160,7 @@ class Cask(private val caskPath: String) {
         val bodyByteArray = bodyBuffer.array()
         val readKey = String(bodyByteArray, 0, keySize)
         val readValue = String(bodyByteArray, keySize, valueSize)
-        log("read - readKey=$readKey, readValue=$readValue")
+        if (VERBOSE) log("read - readKey=$readKey, readValue=$readValue")
 
         return Entry(
             epoch = epoch,
@@ -201,7 +201,7 @@ class Cask(private val caskPath: String) {
             put(value)
         }
 
-        log("createEntry - epoch=$epoch, keySize=$keySize, valueSize=$valueSize, keyType=$keyType, valueType=$valueType, key=$key, value=$value")
+        if (VERBOSE) log("createEntry - epoch=$epoch, keySize=$keySize, valueSize=$valueSize, keyType=$keyType, valueType=$valueType, key=$key, value=$value")
         return entryNoCrc.flip()
     }
 
