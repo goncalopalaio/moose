@@ -8,11 +8,13 @@ import java.nio.channels.FileChannel
 
 private const val VERBOSE = false
 private const val HEADER_SIZE = 3 * Int.SIZE_BYTES + 2 * Short.SIZE_BYTES
+private const val MERGE_FILE_EXTENSION = ".merge"
 
 /**
  * Really basic and fragile version of Bitcask.
  * http://highscalability.com/blog/2011/1/10/riaks-bitcask-a-log-structured-hash-table-for-fast-keyvalue.html
  * https://riak.com/assets/bitcask-intro.pdf
+ * https://docs.riak.com/riak/kv/2.2.3/setup/planning/backend/bitcask/index.html
  */
 class Cask(private val caskPath: String) {
 
@@ -48,8 +50,17 @@ class Cask(private val caskPath: String) {
         // Update in-memory key offsets
         // TODO (Gonçalo): Is it really worth it to have this be explicit. This opens the possibility for a read/write to happen without full scanning of the previous key/values to have happened
 
+        val file = File(caskPath)
+        if (!file.exists()) {
+            log("init - No file")
+            keyDirectory.clear()
+            return
+        }
+
+        index(file) { entry, startPosition, _ ->
+            keyDirectory[entry.key] = startPosition // TODO - Not currently thread safe
+        }
         merge()
-        index()
     }
 
     fun read(key: String): String? {
@@ -81,11 +92,12 @@ class Cask(private val caskPath: String) {
             return
         }
 
-        appendToFile(caskPath) {
+        val file = File(caskPath)
+        appendToFile(file) {
             val channel = it.channel
 
             val initialPosition =
-                channel.position() // TODO (Gonçalo): Catch IOException; atomic updates of endOfFile
+                channel.position() // TODO (Gonçalo): Handle IOException; atomic updates of endOfFile
             val bytesWritten = channel.write(entry)
             if (VERBOSE) log("add - key=$key, value=$value, initialPosition=$initialPosition, bytesWritten=$bytesWritten")
 
@@ -98,37 +110,71 @@ class Cask(private val caskPath: String) {
         }
     }
 
-    private fun merge() {
-        // TODO (Gonçalo): Merge and remove older values.
-    }
-
-    private fun index() {
-        // TODO (Gonçalo): Save key directory in a file?
+    /**
+     * Merges the currently indexed keys that are in memory.
+     * Ensure that the index is up-to-date by calling [index]
+     */
+    fun merge() {
         val file = File(caskPath)
         if (!file.exists()) {
-            log("index - No file")
-            keyDirectory.clear()
+            log("merge - No file")
             return
         }
+
+        val mergedKeys = mutableMapOf<String, Pair<Long, Long>>() // Key, startPosition, endPosition
+        index(file) { entry, startPosition, endPosition ->
+            mergedKeys[entry.key] = startPosition to endPosition
+        }
+
+        val mergeFile = File("$caskPath$MERGE_FILE_EXTENSION")
+
+        val originalOutputStream = FileOutputStream(file, false)
+        val mergeOutputStream = FileOutputStream(mergeFile, true)
+        originalOutputStream.use { os ->
+            val originalChannel = os.channel
+            mergeOutputStream.use { ms ->
+                val mergeChannel = ms.channel
+
+                for ((key, value) in mergedKeys) {
+                    val (startPosition, endPosition) = value
+
+                    val buffer = ByteBuffer.allocate((endPosition - startPosition).toInt())
+                    val header = arrayOf(buffer)
+                    val readBytes = originalChannel.read(header, 0, 1) // TODO (Gonçalo): Handle IOException
+
+                    if (VERBOSE) log("add - key=$key, startPosition=$startPosition, endPosition=$endPosition, readBytes=$readBytes") // TODO (Gonçalo): Can we force the verbose check to be inlined with an inline method?
+
+                    buffer.flip()
+                    mergeChannel.write(buffer)
+                }
+            }
+        }
+
+        -- move new file to old file
+    }
+
+    private fun index(file: File, predicate: (entry: Entry, startPosition: Long, endPosition: Long) -> Unit) {
+        // TODO (Gonçalo): Save key directory in a file?
 
         val fis = FileInputStream(file)
         fis.use {
             val channel = it.channel
-            var position = channel.position()
-            val end = channel.size() // TODO (Gonçalo): Catch IOException
+            var startPosition = channel.position()
+            val end = channel.size() // TODO (Gonçalo): Handle IOException
             do {
-                val beforePosition = position
+                val beforePosition = startPosition
                 val entry = readEntry(channel)
-                val afterPosition = channel.position() // TODO (Gonçalo): Catch IOException
-                log("index - beforePosition=$beforePosition, afterPosition=$afterPosition, entry=$entry")
-                position = afterPosition
+                val endPosition = channel.position() // TODO (Gonçalo): Handle IOException
+                log("index - beforePosition=$beforePosition, endPosition=$endPosition, entry=$entry")
+                startPosition = endPosition
 
                 // Note: The key entries should be in order.
-                // Fragile: There are several methods that throw, so there's the chance that keyDirectory is left pointing to an older value if something throws and we manage to continue.
-                log("index - key=${entry.key}, at=$beforePosition")
-                keyDirectory[entry.key] = beforePosition
+                // @fragile: There are several methods that throw, so there's the chance that keyDirectory is left pointing to an older value if something throws and we manage to continue.
+                log("index - key=${entry.key}, value=${entry.value}, at=$beforePosition")
 
-            } while (position < end)
+                predicate(entry, startPosition, endPosition)
+
+            } while (startPosition < end)
         }
     }
 
@@ -174,10 +220,9 @@ class Cask(private val caskPath: String) {
     }
 
     private fun appendToFile(
-        path: String,
+        file: File,
         predicate: (fileOutputStream: FileOutputStream) -> Unit
     ) {
-        val file = File(path)
         val append = true
         val fos = FileOutputStream(file, append)
         fos.use(predicate) // TODO (Gonçalo): Catch Throwable
